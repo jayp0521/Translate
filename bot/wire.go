@@ -1,3 +1,6 @@
+//go:build wireinject
+// +build wireinject
+
 package bot
 
 import (
@@ -7,7 +10,6 @@ import (
 
 	"github.com/google/wire"
 	"github.com/jayp0521/Translate/utils"
-	"go.uber.org/zap"
 	tele "gopkg.in/telebot.v3"
 )
 
@@ -28,26 +30,35 @@ func provideBotKey() botKey {
 	return botKey(secret)
 }
 
-func provideBot(key botKey, log *zap.SugaredLogger) TBot {
-	pref := tele.Settings{
-		Token:   string(provideBotKey()),
+func provideTeleBotSettings(key botKey) tele.Settings {
+	return tele.Settings{
+		Token:   string(key),
 		Poller:  &tele.LongPoller{Timeout: 10 * time.Second},
 		Verbose: true,
 	}
-	b, err := tele.NewBot(pref)
+}
+
+func provideTeleBot(settings tele.Settings) *tele.Bot {
+	b, err := tele.NewBot(settings)
 	if err != nil {
 		panic(err)
 	}
-	return TBot{
-		log: log,
-		key: key,
-		Bot: b,
-	}
+	return b
 }
 
 func ProvideBot() TBot {
 	botInit.Do(func() {
-		bot = provideBot(provideBotKey(), utils.ProvideLogger())
+		bot = injectBot()
 	})
 	return bot
+}
+
+func injectBot() TBot {
+	panic(wire.Build(
+		utils.SuperSet,
+		provideBotKey,
+		provideTeleBotSettings,
+		provideTeleBot,
+		wire.Struct(new(TBot), "*"),
+	))
 }
